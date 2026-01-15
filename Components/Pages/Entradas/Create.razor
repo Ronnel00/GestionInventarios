@@ -1,0 +1,235 @@
+﻿@page "/Entradas/Create"
+@using AP1GestionInventario.Models
+@using AP1GestionInventario.Services
+@using Microsoft.AspNetCore.Authorization
+@inject EntradaService entradaService
+@inject ProductoService productoService
+@inject NavigationManager navigationManager
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Crear Entrada</PageTitle>
+
+<div class="container mt-4">
+    <div class="card shadow-lg">
+        <div class="card-header bg-success text-white">
+            <h3><i class="bi bi-plus-circle"></i> Registrar Nueva Entrada de Inventario</h3>
+        </div>
+        <div class="card-body">
+            <EditForm Model="entrada" OnValidSubmit="Guardar">
+                <DataAnnotationsValidator />
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Fecha:</label>
+                        <InputDate @bind-Value="entrada.Fecha" class="form-control" />
+                        <ValidationMessage For="@(() => entrada.Fecha)" class="text-danger" />
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Concepto:</label>
+                        <InputText @bind-Value="entrada.Concepto" class="form-control" />
+                        <ValidationMessage For="@(() => entrada.Concepto)" class="text-danger" />
+                    </div>
+                </div>
+
+                <hr />
+                <h4>Detalle de Productos</h4>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Producto:</label>
+                        <select @bind="productoSeleccionadoId" class="form-select">
+                            <option value="0">-- Seleccione --</option>
+                            @foreach (var prod in ListaProductos)
+                            {
+                                <option value="@prod.ProductoId">@prod.Descripcion (Existencia: @prod.Existencia)</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Cantidad:</label>
+                        <input type="number" @bind="cantidad" class="form-control" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Costo:</label>
+                        <input type="number" @bind-value="costo" class="form-control" />
+                    </div>
+
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" @onclick="AgregarDetalle" class="btn btn-primary w-100">
+                            <i class="bi bi-plus"></i> Agregar
+                        </button>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(mensajeError))
+                {
+                    <div class="alert alert-danger">
+                        @mensajeError
+                    </div>
+                }
+
+                @if (entrada.EntradaDetalles.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-secondary">
+                                <tr>
+                                    <th>Producto</th>
+                                    <th>Cantidad</th>
+                                    <th>Costo</th>
+                                    <th>Subtotal</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var detalle in entrada.EntradaDetalles)
+                                {
+                                    <tr>
+                                        <td>@detalle.Producto?.Descripcion</td>
+                                        <td>@detalle.Cantidad</td>
+                                        <td>@detalle.Costo.ToString("C")</td>
+                                        <td>@detalle.Subtotal.ToString("C")</td>
+                                        <td>
+                                            <button type="button" @onclick="() => RemoverDetalle(detalle)" class="btn btn-danger btn-sm">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                    <td colspan="2"><strong>@CalcularTotal().ToString("C")</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        No hay productos agregados al detalle.
+                    </div>
+                }
+
+                <div class="d-flex justify-content-between mt-3">
+                    <button type="button" @onclick="Volver" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Volver
+                    </button>
+                    <button type="submit" class="btn btn-success" disabled="@(!entrada.EntradaDetalles.Any())">
+                        <i class="bi bi-save"></i> Guardar Entrada
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    public Entrada entrada { get; set; } = new Entrada();
+    public List<Producto> ListaProductos { get; set; } = new List<Producto>();
+
+    private int productoSeleccionadoId = 0;
+    private int cantidad = 1;
+    private decimal costo = 0;
+    private string mensajeError = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        ListaProductos = await productoService.Listar(p => true);
+    }
+
+    private void AgregarDetalle()
+    {
+        mensajeError = "";
+
+        if (productoSeleccionadoId == 0)
+        {
+            mensajeError = "Debe seleccionar un producto";
+            return;
+        }
+
+        if (cantidad <= 0)
+        {
+            mensajeError = "La cantidad debe ser mayor a 0";
+            return;
+        }
+
+        if (costo <= 0)
+        {
+            mensajeError = "El costo debe ser mayor a 0";
+            return;
+        }
+
+        var producto = ListaProductos.FirstOrDefault(p => p.ProductoId == productoSeleccionadoId);
+
+        if (producto == null)
+        {
+            mensajeError = "Producto no encontrado";
+            return;
+        }
+
+        var detalle = new EntradaDetalle
+        {
+            ProductoId = productoSeleccionadoId,
+            Producto = producto,
+            Cantidad = cantidad,
+            Costo = costo
+        };
+
+        entrada.EntradaDetalles.Add(detalle);
+
+        // Limpiar campos
+        productoSeleccionadoId = 0;
+        cantidad = 1;
+        costo = 0;
+    }
+
+    private void RemoverDetalle(EntradaDetalle detalle)
+    {
+        entrada.EntradaDetalles.Remove(detalle);
+    }
+
+    private decimal CalcularTotal()
+    {
+        return entrada.EntradaDetalles.Sum(d => d.Subtotal);
+    }
+
+    private async Task Guardar()
+    {
+        if (!entrada.EntradaDetalles.Any())
+        {
+            mensajeError = "Debe agregar al menos un producto al detalle";
+            return;
+        }
+
+        try
+        {
+            entrada.Total = CalcularTotal();
+            var guardado = await entradaService.Guardar(entrada);
+
+            if (guardado)
+            {
+                navigationManager.NavigateTo("/Entradas");
+            }
+            else
+            {
+                mensajeError = "Error al guardar la entrada";
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error: {ex.Message}";
+        }
+    }
+
+    private void Volver()
+    {
+        navigationManager.NavigateTo("/Entradas");
+    }
+}
