@@ -1,0 +1,125 @@
+﻿@page "/Productos"
+@using AP1GestionInventario.Models
+@using AP1GestionInventario.Services
+@using Microsoft.AspNetCore.Authorization
+@inject ProductoService productoService
+@inject NavigationManager navigationManager
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Listado de Productos</PageTitle>
+
+<div class="container mt-4">
+    <div class="card shadow-lg">
+        <div class="card-header bg-primary text-white">
+            <h3><i class="bi bi-box-seam"></i> Listado de Productos</h3>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">Filtrar por:</label>
+                    <select @bind="filtro" class="form-select">
+                        <option value="Id">ID</option>
+                        <option value="Descripcion">Descripción</option>
+                        <option value="Costo">Costo</option>
+                        <option value="Precio">Precio</option>
+                        <option value="Existencia">Existencia</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Buscar:</label>
+                    <div class="input-group">
+                        <input @bind="valorFiltro" type="text" class="form-control" placeholder="Ingrese valor a buscar" />
+                        <button @onclick="Buscar" class="btn btn-outline-primary" type="button">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <a href="/Productos/Create" class="btn btn-success w-100">
+                        <i class="bi bi-plus-circle"></i> Crear Nuevo
+                    </a>
+                </div>
+            </div>
+
+            @if (ListaProductos != null && ListaProductos.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover">
+                        <thead class="table-white">
+                            <tr>
+                                <th>ID</th>
+                                <th>Descripción</th>
+                                <th>Costo</th>
+                                <th>Precio</th>
+                                <th>Existencia</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var producto in ListaProductos)
+                            {
+                                <tr>
+                                    <td>@producto.ProductoId</td>
+                                    <td>@producto.Descripcion</td>
+                                    <td>@producto.Costo.ToString("C")</td>
+                                    <td>@producto.Precio.ToString("C")</td>
+                                    <td><span class="badge bg-info">@producto.Existencia</span></td>
+                                    <td>
+                                        <a href="/Productos/Edit/@producto.ProductoId" class="btn btn-warning btn-sm">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="/Productos/Delete/@producto.ProductoId" class="btn btn-danger btn-sm">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info text-center">
+                    <i class="bi bi-info-circle"></i> No se encontraron productos.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    public List<Producto> ListaProductos { get; set; } = new List<Producto>();
+    private string filtro = "Id";
+    private string valorFiltro = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        ListaProductos = await productoService.Listar(p => true);
+    }
+
+    private async Task Buscar()
+    {
+        if (string.IsNullOrWhiteSpace(valorFiltro))
+        {
+            await Cargar();
+            return;
+        }
+
+        ListaProductos = filtro switch
+        {
+            "Id" => await productoService.Listar(p => p.ProductoId.ToString().Contains(valorFiltro)),
+            "Descripcion" => await productoService.Listar(p => p.Descripcion.ToLower().Contains(valorFiltro.ToLower())),
+            "Costo" => await productoService.Listar(p => p.Costo.ToString().Contains(valorFiltro)),
+            "Precio" => await productoService.Listar(p => p.Precio.ToString().Contains(valorFiltro)),
+            "Existencia" => await productoService.Listar(p => p.Existencia.ToString().Contains(valorFiltro)),
+            _ => await productoService.Listar(p => true)
+        };
+    }
+}
